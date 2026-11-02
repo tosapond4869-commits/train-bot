@@ -40,6 +40,6 @@ def handle_message(event):
         TextSendMessage(text=reply)
     )
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
