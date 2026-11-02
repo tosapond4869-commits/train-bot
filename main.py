@@ -46,5 +46,5 @@ def handle_message(event):
         TextSendMessage(text=reply_text)
     )
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     app.run(port=5000)
