@@ -6,7 +6,6 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(__name__)
 
-# ดึงค่าจาก Environment Variables หรือใส่ Token/Secret ของคุณตรงนี้
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', 'YOUR_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', 'YOUR_CHANNEL_SECRET')
 
@@ -25,9 +24,8 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_message = event.message.text.strip() # ข้อความที่ผู้ใช้พิมพ์เข้ามา
+    user_message = event.message.text.strip()
     
-    # ตรวจสอบว่าผู้ใช้พิมพ์เลขขบวนรถหรือคำว่าขบวนเข้ามาไหม
     if "ขบวน" in user_message or user_message.isdigit():
         train_num = user_message.replace("ขบวน", "").strip()
         reply_text = (
@@ -46,6 +44,6 @@ def handle_message(event):
         TextSendMessage(text=reply_text)
     )
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
