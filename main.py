@@ -4,7 +4,7 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # ดึงค่าจาก Environment Variables หรือใส่ Token/Secret ของคุณตรงนี้
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', 'YOUR_CHANNEL_ACCESS_TOKEN')
