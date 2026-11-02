@@ -6,7 +6,6 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(_name_)
 
-# --- ใส่กุญแจที่ถูกต้องเรียบร้อยแล้ว ---
 LINE_CHANNEL_ACCESS_TOKEN = 'kpJT0c7AdgfQ4NyIAPeNdOlRcg5KMcyhTazAjEaVxyETKghJLXXoYksLie7x2exUEHwbcHQH9HWuZk35Ugl76mx1a0dwauu826LxHCAo1YOfm9NwCl6aXnBFHkVJP+q8qXtwXvtEvBs2EmFc+a91VwdB04t89/1O/w1cDnyilFU='
 LINE_CHANNEL_SECRET = 'A67694a93deb3ade941d4073641ebc1a'
 
@@ -42,5 +41,5 @@ def handle_message(event):
     )
 
 if _name_ == "_main_":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
