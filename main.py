@@ -1,6 +1,4 @@
 import os
-import requests
-from bs4 import BeautifulSoup
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -13,48 +11,6 @@ LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '')
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
-
-def get_train_status(train_num):
-    """
-    ฟังก์ชันดึงสถานะขบวนรถไฟเรียลไทม์จากระบบ TrainMaster การรถไฟฯ
-    """
-    url = f"https://ttsview.railway.co.th/check_status.php?train_no={train_num}"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=5)
-        response.encoding = 'utf-8'
-        
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # ค้นหาข้อความสถานีในตารางข้อมูล
-            # ตัวอย่างโครงสร้างข้อมูลจากหน้าเว็บ
-            status_element = soup.find('div', {'id': 'result'}) or soup.find('table')
-            
-            if status_element:
-                text_content = status_element.get_text(separator="\n", strip=True)
-                # ดึงเฉพาะข้อความส่วนสำคัญ หรือตัดคำตอบกลับ
-                lines = [line for line in text_content.split('\n') if line]
-                if len(lines) > 0:
-                    summary = "\n".join(lines[:6]) # นำ 6 บรรทัดแรกมาแสดง
-                    return f"🚂 สถานะขบวนรถ {train_num}\n\n{summary}"
-        
-        # หากดึงข้อมูลอัตโนมัติไม่สำเร็จ ให้ fallback ส่งลิงก์แผนที่ตามเดิม
-        return (
-            f"🚂 ตรวจสอบขบวนรถ: {train_num}\n\n"
-            f"ดูพิกัดตำแหน่งเรียลไทม์บนแผนที่สายตะวันออก:\n"
-            f"https://ttsmaster.railway.co.th/v3/trackMap/?line=3"
-        )
-    except Exception as e:
-        # กรณีเกิดข้อผิดพลาดในการเชื่อมต่อ
-        return (
-            f"🚂 ตรวจสอบขบวนรถ: {train_num}\n\n"
-            f"ดูพิกัดตำแหน่งเรียลไทม์บนแผนที่สายตะวันออก:\n"
-            f"https://ttsmaster.railway.co.th/v3/trackMap/?line=3"
-        )
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -70,14 +26,32 @@ def callback():
 def handle_message(event):
     user_message = event.message.text.strip()
     
-    # เช็คว่าผู้ใช้พิมพ์เลขขบวนรถหรือไม่
-    if "ขบวน" in user_message or user_message.isdigit():
-        train_num = user_message.replace("ขบวน", "").strip()
-        reply_text = get_train_status(train_num)
+    # ตรวจสอบว่าเป็นตัวเลขทั้งหมดหรือไม่
+    if user_message.isdigit():
+        train_num = user_message
+        
+        # ตัวอย่างเงื่อนไขการแยกช่วงเลขขบวน (สามารถปรับเปลี่ยนช่วงเลขขบวนสินค้าตามจริงได้ทีหลังครับ)
+        # สมมติว่าถ้าเลขขบวนอยู่ในช่วงรถสินค้า ให้วิ่งไปลิงก์สินค้า
+        # หรือถ้าเป็นเลขขบวนปกติ ให้วิ่งไปลิงก์รถโดยสารสายตะวันออก
+        
+        # ตัวอย่าง: สมมติเลขขบวนรถสินค้าขึ้นต้นด้วย 5 หรือ 8 (หรือตามช่วงที่รถไฟใช้จริง)
+        # ตรงนี้เราทำโครงสร้างแยกไว้ให้ก่อนครับ
+        if train_num.startswith("5") or train_num.startswith("8"):
+            reply_text = (
+                f"📦 ตรวจสอบขบวนรถสินค้า: {train_num}\n\n"
+                f"คลิกดูพิกัดและสถานะรถสินค้า:\n"
+                f"https://ttsview.railway.co.th/v3/freight/?train={train_num}"
+            )
+        else:
+            reply_text = (
+                f"🚂 ตรวจสอบขบวนรถโดยสาร: {train_num}\n\n"
+                f"คลิกดูพิกัดและสถานะบนแผนที่สายตะวันออก:\n"
+                f"https://ttsview.railway.co.th/v3/trackMap/?line=3&train={train_num}"
+            )
     else:
         reply_text = (
-            "สวัสดีครับ! บอทเช็คสถานะขบวนรถไฟพร้อมใช้งาน\n"
-            "พิมพ์เลขขบวนรถที่ต้องการ (เช่น 281 หรือ ขบวน 1138) ได้เลยครับ"
+            "สวัสดีครับ! บอทเช็คสถานะรถไฟ\n\n"
+            "📌 เพียงพิมพ์เลขขบวนรถที่ต้องการ (เช่น 281 หรือเลขขบวนสินค้า) ได้เลยครับ ระบบจะตรวจสอบให้อัตโนมัติ"
         )
     
     line_bot_api.reply_message(
@@ -88,3 +62,4 @@ def handle_message(event):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
