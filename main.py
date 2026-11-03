@@ -16,7 +16,6 @@ LINE_NOTIFY_TARGET = os.environ.get('LINE_NOTIFY_TARGET', '')
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# แคชสำหรับจำสถานีล่าสุดของแต่ละขบวน ป้องกันการส่งข้อความซ้ำซาก
 sent_cache = {}
 
 @app.route("/callback", methods=['POST'])
@@ -84,7 +83,6 @@ def check_single_train(train_num):
             
     return f"❌ ขบวน {train_num} อาจจะจอดอยู่ที่สถานีต้นทาง หรืออยู่นอกรอบเวลาวิ่งในขณะนี้"
 
-# ฟังก์ชันรันเบื้องหลัง เช็กทุกขบวนอัตโนมัติทุกๆ 1 นาที (60 วินาที)
 def background_train_monitor():
     while True:
         time.sleep(60) 
@@ -97,4 +95,51 @@ def background_train_monitor():
             'Referer': 'https://ttsview.railway.co.th/'
         }
         
-        api
+        api_list = [
+            "https://ttsview.railway.co.th/v3/freight/allCargoTrack?lang=th",
+            "https://ttsview.railway.co.th/v3/allTrack?lang=th",
+            "https://ttsview.railway.co.th/v3/getTrainTrackingList?lang=th"
+        ]
+        
+        seen_trains = set()
+        
+        for url in api_list:
+            try:
+                res = requests.get(url, headers=headers, timeout=5)
+                if res.status_code == 200:
+                    data = res.json()
+                    if isinstance(data, list):
+                        for item in data:
+                            train_code = str(item.get('train_code', item.get('trainNo', item.get('code', '')))).strip()
+                            if not train_code or train_code in seen_trains:
+                                continue
+                            seen_trains.add(train_code)
+                            
+                            station = item.get('station_name', item.get('current_station', item.get('last_station', 'กำลังเดินทาง')))
+                            time_str = item.get('time', item.get('update_time', item.get('arrival_time', 'ข้อมูลสด')))
+                            status = item.get('status', item.get('delay_status', 'ปกติ'))
+                            train_name = item.get('train_name', item.get('name', ''))
+                            
+                            last_station = sent_cache.get(train_code, "")
+                            if station and station != last_station:
+                                sent_cache[train_code] = station
+                                notification_text = (
+                                    f"🚨 แจ้งเตือนสถานะรถไฟอัตโนมัติ\n\n"
+                                    f"🚂 ขบวนรถ: {train_code} {train_name}\n"
+                                    f"📍 สถานีล่าสุด: {station}\n"
+                                    f"⏱️ เวลา: {time_str}\n"
+                                    f"⚠️ สถานะ: {status}"
+                                )
+                                try:
+                                    line_bot_api.push_message(LINE_NOTIFY_TARGET, TextSendMessage(text=notification_text))
+                                except Exception:
+                                    pass
+            except Exception:
+                continue
+
+monitor_thread = threading.Thread(target=background_train_monitor, daemon=True)
+monitor_thread.start()
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
