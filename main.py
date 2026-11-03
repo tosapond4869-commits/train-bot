@@ -48,52 +48,52 @@ def search_train_detail(train_num):
     }
     
     try:
-        # เรียกใช้งาน API ค้นหาข้อมูลขบวนรถโดยตรงตามเลขขบวน
-        api_url = f"https://ttsview.railway.co.th/v3/searchQuery?train={train_num}&lang=th"
-        response = requests.get(api_url, headers=headers, timeout=5)
+        # ลองค้นหาผ่าน API หลายรูปแบบที่เว็บใช้งาน
+        urls_to_try = [
+            f"https://ttsview.railway.co.th/v3/search?train={train_num}&lang=th",
+            f"https://ttsview.railway.co.th/v3/searchQuery?train={train_num}&lang=th",
+            f"https://ttsview.railway.co.th/v3/getTrainTrackingList?train={train_num}&lang=th"
+        ]
         
-        if response.status_code == 200:
-            data = response.json()
+        found_item = None
+        for api_url in urls_to_try:
+            response = requests.get(api_url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data:
+                    if isinstance(data, list):
+                        found_item = data[0]
+                    else:
+                        found_item = data
+                    break
+        
+        # ถ้ายังไม่เจอใน API ค้นหาโดยตรง ให้ลองดึงจากลิสต์รวมทั้งหมด (allTrack)
+        if not found_item:
+            all_track_url = "https://ttsview.railway.co.th/v3/allTrack?lang=th"
+            all_res = requests.get(all_track_url, headers=headers, timeout=5)
+            if all_res.status_code == 200:
+                for item in all_res.json():
+                    if train_num in str(item.get('train_code', '')):
+                        found_item = item
+                        break
+                        
+        if found_item:
+            train_code = found_item.get('train_code', train_num)
+            train_name = found_item.get('train_name', found_item.get('name', ''))
+            station = found_item.get('station_name', found_item.get('current_station', 'กำลังเดินทาง'))
+            status = found_item.get('status', found_item.get('delay_status', 'ปกติ'))
+            train_id = found_item.get('id', train_num)
             
-            # ตรวจสอบว่ามีข้อมูลขบวนรถส่งกลับมาหรือไม่
-            if data:
-                # รองรับทั้งกรณีที่เป็นอาเรย์หรือ object เดี่ยว
-                item = data[0] if isinstance(data, list) else data
-                
-                train_code = item.get('train_code', train_num)
-                train_name = item.get('train_name', item.get('name', ''))
-                station = item.get('station_name', item.get('current_station', 'กำลังเดินทาง'))
-                status = item.get('status', item.get('delay_status', 'ปกติ'))
-                train_id = item.get('id', train_num)
-                
-                return (
-                    f"🚂 ขบวน: {train_code} {train_name}\n"
-                    f"📍 สถานีล่าสุด: {station}\n"
-                    f"⏱️ สถานะ: {status}\n\n"
-                    f"🔗 ดูแผนที่แบบละเอียด:\n"
-                    f"https://ttsview.railway.co.th/v3/trackMap/?train={train_id}"
-                )
-                
-        # หากไม่พบจาก API ค้นหา ให้ลองเช็กจากลิสต์รวมทั้งหมด (allTrack) สำรอง
-        all_track_url = "https://ttsview.railway.co.th/v3/allTrack?lang=th"
-        all_res = requests.get(all_track_url, headers=headers, timeout=5)
-        if all_res.status_code == 200:
-            for item in all_res.json():
-                code_str = str(item.get('train_code', ''))
-                if train_num in code_str:
-                    train_id = item.get('id', '')
-                    station = item.get('station_name', 'กำลังวิ่งบนเส้นทาง')
-                    status = item.get('status', 'ปกติ')
-                    return (
-                        f"🚂 ขบวนรถ: {code_str}\n"
-                        f"📍 สถานีล่าสุด: {station}\n"
-                        f"⏱️ สถานะ: {status}\n\n"
-                        f"🔗 ดูแผนที่แบบละเอียด:\n"
-                        f"https://ttsview.railway.co.th/v3/trackMap/?train={train_id}"
-                    )
+            return (
+                f"🚂 ขบวน: {train_code} {train_name}\n"
+                f"📍 สถานีล่าสุด: {station}\n"
+                f"⏱️ สถานะ: {status}\n\n"
+                f"🔗 ดูแผนที่แบบละเอียด:\n"
+                f"https://ttsview.railway.co.th/v3/trackMap/?train={train_id}"
+            )
 
         return (
-            f"❌ไม่พบข้อมูลสถานะสดของขบวน {train_num} ในระบบขณะนี้\n"
+            f"❌ ไม่พบข้อมูลสถานะสดของขบวน {train_num} ในระบบขณะนี้\n"
             f"(แม้อาจจะอยู่นอกรอบเวลาวิ่ง หรือจอดอยู่ที่สถานีต้นทาง)\n\n"
             f"ลองตรวจสอบผ่านแผนที่โดยตรง:\n"
             f"https://ttsview.railway.co.th/v3/trackMap/?line=3&train={train_num}"
