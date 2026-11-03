@@ -29,7 +29,7 @@ def handle_message(event):
     
     if user_message.isdigit():
         train_num = user_message
-        reply_text = search_train_robust(train_num)
+        reply_text = search_train_clean(train_num)
     else:
         reply_text = (
             "สวัสดีครับ! บอทเช็คสถานะรถไฟ\n\n"
@@ -41,7 +41,7 @@ def handle_message(event):
         TextSendMessage(text=reply_text)
     )
 
-def search_train_robust(train_num):
+def search_train_clean(train_num):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': 'https://ttsview.railway.co.th/'
@@ -50,7 +50,6 @@ def search_train_robust(train_num):
     try:
         found_item = None
         
-        # ดึงข้อมูลจาก API หลักทั้งหมด
         api_urls = [
             "https://ttsview.railway.co.th/v3/allTrack?lang=th",
             "https://ttsview.railway.co.th/v3/getTrainTrackingList?lang=th"
@@ -63,7 +62,6 @@ def search_train_robust(train_num):
                     data = res.json()
                     if isinstance(data, list):
                         for item in data:
-                            # แปลงค่ารหัสขบวนเป็นข้อความแล้วเทียบแบบยืดหยุ่น
                             code_val = str(item.get('train_code', item.get('trainNo', ''))).strip()
                             if train_num in code_val or code_val == train_num:
                                 found_item = item
@@ -87,10 +85,9 @@ def search_train_robust(train_num):
                 f"https://ttsview.railway.co.th/v3/trackMap/?train={train_id}"
             )
 
-        # หากไม่พบในระบบสด ให้ดึงลิงก์ตรงให้ผู้ใช้กดเช็กในเว็บได้ทันที
         return (
-            f"❌ ไม่พบข้อมูลสถานะสดของขบวน {train_num} ในระบบขณะนี้[span_1](start_span)[span_1](end_span)\n"
-            f"(แม้อาจจะอยู่นอกรอบเวลาวิ่ง หรือจอดอยู่ที่สถานีต้นทาง)[span_2](start_span)[span_2](end_span)\n\n"
+            f"❌ ไม่พบข้อมูลสถานะสดของขบวน {train_num} ในระบบขณะนี้\n"
+            f"(แม้อาจจะอยู่นอกรอบเวลาวิ่ง หรือจอดอยู่ที่สถานีต้นทาง)\n\n"
             f"🔗 ตรวจสอบผ่านแผนที่โดยตรง:\n"
             f"https://ttsview.railway.co.th/v3/trackMap/?line=3&train={train_num}"
         )
