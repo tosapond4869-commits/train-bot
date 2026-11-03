@@ -29,7 +29,7 @@ def handle_message(event):
     
     if user_message.isdigit():
         train_num = user_message
-        reply_text = search_train_clean(train_num)
+        reply_text = search_train_direct(train_num)
     else:
         reply_text = (
             "สวัสดีครับ! บอทเช็คสถานะรถไฟ\n\n"
@@ -41,15 +41,16 @@ def handle_message(event):
         TextSendMessage(text=reply_text)
     )
 
-def search_train_clean(train_num):
+def search_train_direct(train_num):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': 'https://ttsview.railway.co.th/'
     }
     
+    found_item = None
+    
     try:
-        found_item = None
-        
+        # 1. ลองค้นหาจาก API รายชื่อรถรวมก่อน
         api_urls = [
             "https://ttsview.railway.co.th/v3/allTrack?lang=th",
             "https://ttsview.railway.co.th/v3/getTrainTrackingList?lang=th"
@@ -57,7 +58,7 @@ def search_train_clean(train_num):
         
         for url in api_urls:
             try:
-                res = requests.get(url, headers=headers, timeout=5)
+                res = requests.get(url, headers=headers, timeout=4)
                 if res.status_code == 200:
                     data = res.json()
                     if isinstance(data, list):
@@ -71,6 +72,24 @@ def search_train_clean(train_num):
             if found_item:
                 break
 
+        # 2. ถ้าในลิสต์รวมไม่เจอ ให้ยิงตรงไปที่ API ค้นหาหรือดึงข้อมูลตาม ID ขบวนโดยตรง
+        if not found_item:
+            direct_urls = [
+                f"https://ttsview.railway.co.th/v3/searchQuery?train={train_num}&lang=th",
+                f"https://ttsview.railway.co.th/v3/search?train={train_num}&lang=th"
+            ]
+            for d_url in direct_urls:
+                try:
+                    d_res = requests.get(d_url, headers=headers, timeout=4)
+                    if d_res.status_code == 200:
+                        d_data = d_res.json()
+                        if d_data:
+                            found_item = d_data[0] if isinstance(d_data, list) else d_data
+                            break
+                except Exception:
+                    continue
+
+        # หากเจอข้อมูล ไม่ว่าจะจากทางไหน ก็นำมาแสดงผล
         if found_item:
             train_code = found_item.get('train_code', found_item.get('trainNo', train_num))
             station = found_item.get('station_name', found_item.get('current_station', 'กำลังเดินทาง'))
@@ -85,15 +104,18 @@ def search_train_clean(train_num):
                 f"https://ttsview.railway.co.th/v3/trackMap/?train={train_id}"
             )
 
+        # 3. ถ้าไม่พบจริงๆ ส่งลิงก์ตรงบังคับเปิดแผนที่ของขบวนนั้นให้ทันที
         return (
-            f"❌ ไม่พบข้อมูลสถานะสดของขบวน {train_num} ในระบบขณะนี้\n"
-            f"(แม้อาจจะอยู่นอกรอบเวลาวิ่ง หรือจอดอยู่ที่สถานีต้นทาง)\n\n"
-            f"🔗 ตรวจสอบผ่านแผนที่โดยตรง:\n"
+            f"⚠️ ระบบไม่พบข้อมูลสถานะสดของขบวน {train_num} ในขณะนี้\n\n"
+            f"🔗 คลิกเพื่อเปิดดูผ่านแผนที่การรถไฟฯ โดยตรง:\n"
             f"https://ttsview.railway.co.th/v3/trackMap/?line=3&train={train_num}"
         )
         
     except Exception as e:
-        return f"⚠️ เกิดข้อผิดพลาดในการดึงข้อมูล: {str(e)}"
+        return (
+            f"🔗 ตรวจสอบขบวน {train_num} ผ่านแผนที่โดยตรง:\n"
+            f"https://ttsview.railway.co.th/v3/trackMap/?line=3&train={train_num}"
+        )
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
