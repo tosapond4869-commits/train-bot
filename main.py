@@ -48,7 +48,6 @@ def search_train_detail(train_num):
     }
     
     try:
-        # ลองค้นหาผ่าน API หลายรูปแบบที่เว็บใช้งาน
         urls_to_try = [
             f"https://ttsview.railway.co.th/v3/search?train={train_num}&lang=th",
             f"https://ttsview.railway.co.th/v3/searchQuery?train={train_num}&lang=th",
@@ -57,25 +56,31 @@ def search_train_detail(train_num):
         
         found_item = None
         for api_url in urls_to_try:
-            response = requests.get(api_url, headers=headers, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if data:
-                    if isinstance(data, list):
-                        found_item = data[0]
-                    else:
-                        found_item = data
-                    break
+            try:
+                response = requests.get(api_url, headers=headers, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data:
+                        if isinstance(data, list):
+                            found_item = data[0]
+                        else:
+                            found_item = data
+                        break
+            except Exception:
+                continue # หากแปลง JSON ไม่ผ่าน ให้ข้ามไปลองลิงก์ถัดไป
         
-        # ถ้ายังไม่เจอใน API ค้นหาโดยตรง ให้ลองดึงจากลิสต์รวมทั้งหมด (allTrack)
+        # ถ้ายังไม่เจอ ให้ลองดึงจากลิสต์รวมทั้งหมด (allTrack)
         if not found_item:
             all_track_url = "https://ttsview.railway.co.th/v3/allTrack?lang=th"
-            all_res = requests.get(all_track_url, headers=headers, timeout=5)
-            if all_res.status_code == 200:
-                for item in all_res.json():
-                    if train_num in str(item.get('train_code', '')):
-                        found_item = item
-                        break
+            try:
+                all_res = requests.get(all_track_url, headers=headers, timeout=5)
+                if all_res.status_code == 200:
+                    for item in all_res.json():
+                        if train_num in str(item.get('train_code', '')):
+                            found_item = item
+                            break
+            except Exception:
+                pass
                         
         if found_item:
             train_code = found_item.get('train_code', train_num)
