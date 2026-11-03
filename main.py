@@ -37,9 +37,8 @@ def handle_message(event):
         reply_text = check_single_train(train_num)
     else:
         reply_text = (
-            "🤖 สวัสดีครับคุณเจมส์! บอทติดตามสถานะรถไฟสาย 3\n\n"
-            "📌 พิมพ์เลขขบวนรถที่ต้องการเช็กแบบด่วนได้ทันที (เช่น 379 หรือ 4447)\n"
-            "⏰ ระบบกำลังสแกนและพร้อมแจ้งเตือนอัตโนมัติครับ"
+            "🤖 บอทติดตามสถานะรถไฟสาย 3 พร้อมทำงานครับ\n\n"
+            "📌 พิมพ์เลขขบวนรถเพื่อเช็กด่วนได้ทันที (เช่น 379, 4460, 4447)"
         )
     
     line_bot_api.reply_message(
@@ -50,7 +49,6 @@ def handle_message(event):
 def fetch_train_data():
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json, text/plain, */*',
         'Referer': 'https://ttsview.railway.co.th/'
     }
     
@@ -60,47 +58,44 @@ def fetch_train_data():
         "https://ttsview.railway.co.th/v3/getTrainTrackingList?lang=th"
     ]
     
-    all_trains = []
     for url in urls:
         try:
             res = requests.get(url, headers=headers, timeout=5)
             if res.status_code == 200:
                 data = res.json()
-                if isinstance(data, list):
-                    all_trains.extend(data)
+                if isinstance(data, list) and len(data) > 0:
+                    return data
                 elif isinstance(data, dict):
                     for k, v in data.items():
-                        if isinstance(v, list):
-                            all_trains.extend(v)
+                        if isinstance(v, list) and len(v) > 0:
+                            return v
         except Exception:
             continue
-            
-    return all_trains
+    return []
 
 def check_single_train(train_num):
     trains = fetch_train_data()
     
     for item in trains:
-        code_str = str(item.get('train_code', item.get('trainNo', item.get('code', item.get('trainNumber', item.get('train_id', '')))))).strip()
-        if train_num in code_str or code_str == train_num:
-            station = item.get('station_name', item.get('current_station', item.get('last_station', item.get('station', 'กำลังเดินทาง'))))
-            time_str = item.get('time', item.get('update_time', item.get('arrival_time', 'ตรวจสอบในระบบ')))
-            status = item.get('status', item.get('delay_status', 'ปกติ'))
-            train_name = item.get('train_name', item.get('name', ''))
-            return (
-                f"🚂 ขบวนรถ: {train_num} {train_name}\n"
-                f"📍 สถานีล่าสุด: {station}\n"
-                f"⏱️ เวลา: {time_str}\n"
-                f"⚠️ สถานะ: {status}"
-            )
-            
-    return f"❌ ไม่พบข้อมูลสดของขบวน {train_num} ในขณะนี้ (อาจอยู่นอกรอบเวลาเดินรถหรือจอดอยู่ที่สถานีต้นทาง)"
+        for key in ['train_code', 'trainNo', 'code', 'trainNumber', 'train_id', 'number']:
+            code_str = str(item.get(key, '')).strip()
+            if train_num in code_str or code_str == train_num:
+                station = item.get('station_name', item.get('current_station', item.get('last_station', item.get('station', 'กำลังเดินทาง'))))
+                time_str = item.get('time', item.get('update_time', item.get('arrival_time', 'ข้อมูลล่าสุด')))
+                status = item.get('status', item.get('delay_status', 'ปกติ'))
+                train_name = item.get('train_name', item.get('name', ''))
+                return (
+                    f"🚂 ขบวนรถ: {train_num} {train_name}\n"
+                    f"📍 สถานีล่าสุด: {station}\n"
+                    f"⏱️ เวลา: {time_str}\n"
+                    f"⚠️ สถานะ: {status}"
+                )
+                
+    return f"❌ ไม่พบข้อมูลพิกัดสดของขบวน {train_num} ในขณะนี้ (ขบวนอาจยังไม่ออกวิ่งหรือจอดอยู่ที่สถานีต้นทาง)"
 
 def background_train_monitor():
-    print("🚀 Background Train Monitor Started...")
     while True:
         time.sleep(60) 
-        
         if not LINE_NOTIFY_TARGET:
             continue
             
@@ -109,7 +104,13 @@ def background_train_monitor():
             seen_trains = set()
             
             for item in trains:
-                train_code = str(item.get('train_code', item.get('trainNo', item.get('code', item.get('trainNumber', item.get('train_id', '')))))).strip()
+                train_code = ""
+                for key in ['train_code', 'trainNo', 'code', 'trainNumber', 'train_id', 'number']:
+                    val = str(item.get(key, '')).strip()
+                    if val:
+                        train_code = val
+                        break
+                        
                 if not train_code or train_code in seen_trains:
                     continue
                 seen_trains.add(train_code)
