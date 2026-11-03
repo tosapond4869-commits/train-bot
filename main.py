@@ -27,14 +27,13 @@ def callback():
 def handle_message(event):
     user_message = event.message.text.strip()
     
-    # ตรวจสอบว่าเป็นตัวเลข (เลขขบวนรถ) หรือไม่
     if user_message.isdigit():
         train_num = user_message
         reply_text = search_train(train_num)
     else:
         reply_text = (
             "สวัสดีครับ! บอทเช็คสถานะรถไฟ\n\n"
-            "📌 พิมพ์เลขขบวนรถที่ต้องการตรวจสอบได้เลยครับ ระบบจะค้นหาและดึงข้อมูลให้ทันที"
+            "📌 พิมพ์เลขขบวนรถที่ต้องการตรวจสอบได้เลยครับ ระบบจะดึงข้อมูลสถานีและพิกัดให้ทันที"
         )
     
     line_bot_api.reply_message(
@@ -56,10 +55,13 @@ def search_train(train_num):
             for item in cargo_res.json():
                 code_str = str(item.get('train_code', ''))
                 if train_num in code_str:
+                    station = item.get('station_name', item.get('current_station', 'กำลังเดินทาง'))
+                    status = item.get('status', 'ปกติ')
                     return (
-                        f"📦 พบข้อมูลขบวนรถสินค้า: {code_str}\n\n"
-                        f"🔗 คลิกดูพิกัดแผนที่รถสินค้า:\n"
-                        f"https://ttsview.railway.co.th/v3/freight/?train={train_num}"
+                        f"📦 ขบวนรถสินค้า: {code_str}\n"
+                        f"📍 สถานีล่าสุด: {station}\n"
+                        f"⏱️ สถานะ: {status}\n\n"
+                        f"🔗 ดูแผนที่: https://ttsview.railway.co.th/v3/freight/?train={train_num}"
                     )
                     
         # 2. ค้นหาจากระบบติดตามทั้งหมด (allTrack)
@@ -70,9 +72,14 @@ def search_train(train_num):
                 code_str = str(item.get('train_code', ''))
                 train_id = item.get('id', '')
                 if train_num in code_str:
+                    # ดึงข้อมูลชื่อสถานีหรือรายละเอียดจาก JSON
+                    station = item.get('station_name', item.get('current_station', item.get('last_station', 'กำลังวิ่งบนเส้นทาง')))
+                    status = item.get('status', item.get('delay_status', 'กำลังให้บริการ'))
                     return (
-                        f"🚂 พบข้อมูลขบวนรถ: {code_str}\n\n"
-                        f"🔗 คลิกดูพิกัดแผนที่แบบละเอียด:\n"
+                        f"🚂 ขบวนรถ: {code_str}\n"
+                        f"📍 สถานีล่าสุด / จุดพิกัด: {station}\n"
+                        f"⏱️ สถานะ: {status}\n\n"
+                        f"🔗 ดูแผนที่แบบละเอียด:\n"
                         f"https://ttsview.railway.co.th/v3/trackMap/?train={train_id}"
                     )
 
@@ -84,16 +91,20 @@ def search_train(train_num):
                 code_str = str(item.get('train_code', ''))
                 train_id = item.get('id', '')
                 if train_num in code_str:
+                    station = item.get('station_name', item.get('current_station', 'กำลังเดินทาง'))
+                    status = item.get('status', 'ปกติ')
                     return (
-                        f"🚂 พบข้อมูลขบวนรถโดยสาร: {code_str}\n\n"
-                        f"🔗 คลิกดูพิกัดแผนที่แบบละเอียด:\n"
+                        f"🚂 ขบวนรถโดยสาร: {code_str}\n"
+                        f"📍 สถานีล่าสุด: {station}\n"
+                        f"⏱️ สถานะ: {status}\n\n"
+                        f"🔗 ดูแผนที่แบบละเอียด:\n"
                         f"https://ttsview.railway.co.th/v3/trackMap/?train={train_id}"
                     )
                     
-        # 4. ถ้าหาไม่พบจริงๆ ให้ส่งลิงก์ตรงสำรองไป
+        # 4. หากไม่พบในระบบสด (เช่น นอกเวลาเดินรถ)
         return (
-            f"❌ ไม่พบข้อมูลสถานะสดของขบวน {train_num} ในระบบขณะนี้\n"
-            f"(อาจจะจอดอยู่ที่สถานีต้นทาง หรืออยู่นอกรอบเวลาวิ่ง)\n\n"
+            f"❌ ไม่พบข้อมูลสถานะสดของขบวน {train_num} ในระบบขณะนี้[span_1](start_span)[span_1](end_span)\n"
+            f"(อาจจะจอดอยู่ที่สถานีต้นทาง หรืออยู่นอกรอบเวลาวิ่ง)[span_2](start_span)[span_2](end_span)\n\n"
             f"ลองตรวจสอบผ่านแผนที่โดยตรง:\n"
             f"https://ttsview.railway.co.th/v3/trackMap/?line=3&train={train_num}"
         )
