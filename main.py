@@ -37,9 +37,9 @@ def handle_message(event):
         reply_text = check_single_train(train_num)
     else:
         reply_text = (
-            "🤖 สวัสดีครับ! บอทติดตามสถานะรถไฟ\n\n"
+            "🤖 สวัสดีครับคุณเจมส์! บอทติดตามสถานะรถไฟ\n\n"
             "📌 พิมพ์เลขขบวนรถที่ต้องการเช็กแบบด่วนได้ทันที (เช่น 379 หรือ 4447)\n"
-            "⏰ ระบบจะคอยสแกนทุกขบวนและแจ้งเตือนอัตโนมัติทุกๆ 1 นาทีครับ"
+            "⏰ ระบบกำลังสแกนและพร้อมแจ้งเตือนอัตโนมัติครับ"
         )
     
     line_bot_api.reply_message(
@@ -53,7 +53,6 @@ def fetch_all_train_data():
         'Referer': 'https://ttsmaster.railway.co.th/'
     }
     
-    # เพิ่ม Endpoint ของสายทางสาย 3 และ API ทั้งหมดเพื่อให้ครอบคลุมที่สุด
     urls = [
         "https://ttsmaster.railway.co.th/v3/api/trainList?line=3",
         "https://ttsview.railway.co.th/v3/freight/allCargoTrack?lang=th",
@@ -70,7 +69,6 @@ def fetch_all_train_data():
                 if isinstance(data, list):
                     all_trains.extend(data)
                 elif isinstance(data, dict):
-                    # เผื่อข้อมูลอยู่ในรูปแบบ object มัดรวม
                     for k, v in data.items():
                         if isinstance(v, list):
                             all_trains.extend(v)
@@ -97,10 +95,12 @@ def check_single_train(train_num):
     return f"❌ ไม่พบข้อมูลสดของขบวน {train_num} ในขณะนี้"
 
 def background_train_monitor():
+    print("🚀 Background Train Monitor Started...")
     while True:
         time.sleep(60) 
         
         if not LINE_NOTIFY_TARGET:
+            print("⚠️ Warning: LINE_NOTIFY_TARGET is empty!")
             continue
             
         trains = fetch_all_train_data()
@@ -118,6 +118,12 @@ def background_train_monitor():
             train_name = item.get('train_name', item.get('name', ''))
             
             last_station = sent_cache.get(train_code, "")
+            
+            # บันทึกค่าเริ่มต้นไว้ก่อน ถ้ายังไม่เคยเก็บ
+            if train_code not in sent_cache:
+                sent_cache[train_code] = station
+                continue
+                
             if station and station != last_station:
                 sent_cache[train_code] = station
                 notification_text = (
@@ -129,8 +135,9 @@ def background_train_monitor():
                 )
                 try:
                     line_bot_api.push_message(LINE_NOTIFY_TARGET, TextSendMessage(text=notification_text))
-                except Exception:
-                    pass
+                    print(f"✅ Successfully pushed alert for train {train_code} at {station}")
+                except Exception as e:
+                    print(f"❌ Failed to push message for train {train_code}: {e}")
 
 monitor_thread = threading.Thread(target=background_train_monitor, daemon=True)
 monitor_thread.start()
