@@ -49,12 +49,11 @@ def handle_message(event):
 
 def fetch_train_data():
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json, text/plain, */*',
         'Referer': 'https://ttsview.railway.co.th/'
     }
     
-    # ดึงข้อมูลจาก Endpoint สาย 3 และ API ติดตามหลัก
     urls = [
         "https://ttsmaster.railway.co.th/v3/api/trainList?line=3",
         "https://ttsview.railway.co.th/v3/allTrack?lang=th",
@@ -64,7 +63,7 @@ def fetch_train_data():
     all_trains = []
     for url in urls:
         try:
-            res = requests.get(url, headers=headers, timeout=6)
+            res = requests.get(url, headers=headers, timeout=5)
             if res.status_code == 200:
                 data = res.json()
                 if isinstance(data, list):
@@ -73,8 +72,7 @@ def fetch_train_data():
                     for k, v in data.items():
                         if isinstance(v, list):
                             all_trains.extend(v)
-        except Exception as e:
-            print(f"API Error ({url}): {e}")
+        except Exception:
             continue
             
     return all_trains
@@ -96,7 +94,7 @@ def check_single_train(train_num):
                 f"⚠️ สถานะ: {status}"
             )
             
-    return f"❌ ไม่พบข้อมูลสดของขบวน {train_num} ในขณะนี้ (อาจอยู่นอกรอบเวลาเดินรถหรือสถานีต้นทาง)"
+    return f"❌ ไม่พบข้อมูลสดของขบวน {train_num} ในขณะนี้ (อาจอยู่นอกรอบเวลาเดินรถหรือจอดอยู่ที่สถานีต้นทาง)"
 
 def background_train_monitor():
     print("🚀 Background Train Monitor Started...")
@@ -106,27 +104,45 @@ def background_train_monitor():
         if not LINE_NOTIFY_TARGET:
             continue
             
-        trains = fetch_train_data()
-        seen_trains = set()
-        
-        for item in trains:
-            train_code = str(item.get('train_code', item.get('trainNo', item.get('code', item.get('trainNumber', item.get('train_id', '')))))).strip()
-            if not train_code or train_code in seen_trains:
-                continue
-            seen_trains.add(train_code)
+        try:
+            trains = fetch_train_data()
+            seen_trains = set()
             
-            station = item.get('station_name', item.get('current_station', item.get('last_station', item.get('station', 'กำลังเดินทาง'))))
-            time_str = item.get('time', item.get('update_time', item.get('arrival_time', 'ข้อมูลสด')))
-            status = item.get('status', item.get('delay_status', 'ปกติ'))
-            train_name = item.get('train_name', item.get('name', ''))
-            
-            last_station = sent_cache.get(train_code, "")
-            if train_code not in sent_cache:
-                sent_cache[train_code] = station
-                continue
+            for item in trains:
+                train_code = str(item.get('train_code', item.get('trainNo', item.get('code', item.get('trainNumber', item.get('train_id', '')))))).strip()
+                if not train_code or train_code in seen_trains:
+                    continue
+                seen_trains.add(train_code)
                 
-            if station and station != last_station:
-                sent_cache[train_code] = station
-                notification_text = (
-                    f"🚨 แจ้งเตือนสถานะรถไฟอัตโนมัติ\n\n"
-                    f"🚂 ขบวนรถ: {train_code} {train_name}\n"
+                station = item.get('station_name', item.get('current_station', item.get('last_station', item.get('station', 'กำลังเดินทาง'))))
+                time_str = item.get('time', item.get('update_time', item.get('arrival_time', 'ข้อมูลสด')))
+                status = item.get('status', item.get('delay_status', 'ปกติ'))
+                train_name = item.get('train_name', item.get('name', ''))
+                
+                last_station = sent_cache.get(train_code, "")
+                if train_code not in sent_cache:
+                    sent_cache[train_code] = station
+                    continue
+                    
+                if station and station != last_station:
+                    sent_cache[train_code] = station
+                    notification_text = (
+                        f"🚨 แจ้งเตือนสถานะรถไฟอัตโนมัติ\n\n"
+                        f"🚂 ขบวนรถ: {train_code} {train_name}\n"
+                        f"📍 สถานีล่าสุด: {station}\n"
+                        f"⏱️ เวลา: {time_str}\n"
+                        f"⚠️ สถานะ: {status}"
+                    )
+                    try:
+                        line_bot_api.push_message(LINE_NOTIFY_TARGET, TextSendMessage(text=notification_text))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+monitor_thread = threading.Thread(target=background_train_monitor, daemon=True)
+monitor_thread.start()
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
