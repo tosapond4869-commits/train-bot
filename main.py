@@ -50,14 +50,14 @@ def handle_message(event):
 def fetch_all_train_data():
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://ttsmaster.railway.co.th/'
+        'Referer': 'https://ttsview.railway.co.th/'
     }
     
+    # ดึงตรงจาก API หลักที่หน้าเว็บใช้แสดงผลพิกัดรถไฟ
     urls = [
-        "https://ttsmaster.railway.co.th/v3/api/trainList?line=3",
-        "https://ttsview.railway.co.th/v3/freight/allCargoTrack?lang=th",
         "https://ttsview.railway.co.th/v3/allTrack?lang=th",
-        "https://ttsview.railway.co.th/v3/getTrainTrackingList?lang=th"
+        "https://ttsview.railway.co.th/v3/getTrainTrackingList?lang=th",
+        "https://ttsview.railway.co.th/v3/freight/allCargoTrack?lang=th"
     ]
     
     all_trains = []
@@ -79,7 +79,8 @@ def fetch_all_train_data():
 def check_single_train(train_num):
     trains = fetch_all_train_data()
     for item in trains:
-        code_str = str(item.get('train_code', item.get('trainNo', item.get('code', item.get('trainNumber', ''))))).strip()
+        # ค้นหาเลขขบวนจากทุกคีย์ที่เป็นไปได้
+        code_str = str(item.get('train_code', item.get('trainNo', item.get('code', item.get('trainNumber', item.get('train_id', '')))))).strip()
         if train_num in code_str or code_str == train_num:
             station = item.get('station_name', item.get('current_station', item.get('last_station', item.get('station', 'กำลังเดินทาง'))))
             time_str = item.get('time', item.get('update_time', item.get('arrival_time', 'ตรวจสอบในระบบ')))
@@ -92,7 +93,7 @@ def check_single_train(train_num):
                 f"⚠️ สถานะ: {status}"
             )
             
-    return f"❌ ไม่พบข้อมูลสดของขบวน {train_num} ในขณะนี้"
+    return f"❌ ไม่พบข้อมูลสดของขบวน {train_num} ในขณะนี้ (ลองตรวจสอบเลขขบวนอีกครั้ง)"
 
 def background_train_monitor():
     print("🚀 Background Train Monitor Started...")
@@ -104,10 +105,11 @@ def background_train_monitor():
             continue
             
         trains = fetch_all_train_data()
-        seen_trains = set()
+        print(f"🔍 Monitor scanned {len(trains)} items from API.")
         
+        seen_trains = set()
         for item in trains:
-            train_code = str(item.get('train_code', item.get('trainNo', item.get('code', item.get('trainNumber', ''))))).strip()
+            train_code = str(item.get('train_code', item.get('trainNo', item.get('code', item.get('trainNumber', item.get('train_id', '')))))).strip()
             if not train_code or train_code in seen_trains:
                 continue
             seen_trains.add(train_code)
@@ -119,11 +121,12 @@ def background_train_monitor():
             
             last_station = sent_cache.get(train_code, "")
             
-            # บันทึกค่าเริ่มต้นไว้ก่อน ถ้ายังไม่เคยเก็บ
+            # บันทึกสถานีตั้งต้นไว้รอบแรก
             if train_code not in sent_cache:
                 sent_cache[train_code] = station
                 continue
                 
+            # ถ้าสถานีเปลี่ยน ส่งไลน์แจ้งเตือนทันที
             if station and station != last_station:
                 sent_cache[train_code] = station
                 notification_text = (
@@ -135,7 +138,7 @@ def background_train_monitor():
                 )
                 try:
                     line_bot_api.push_message(LINE_NOTIFY_TARGET, TextSendMessage(text=notification_text))
-                    print(f"✅ Successfully pushed alert for train {train_code} at {station}")
+                    print(f"✅ Pushed alert: Train {train_code} moved to {station}")
                 except Exception as e:
                     print(f"❌ Failed to push message for train {train_code}: {e}")
 
